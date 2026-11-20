@@ -1,1 +1,1 @@
-"""Starter package for a synthetic urban-renewal data application."""
+"""城市更新数据应用的初始 Python 包。"""

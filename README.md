@@ -1,15 +1,15 @@
 # Resident Relocation Capacity
 
-A Python starter project for a synthetic city-renewal data workflow. It contains input examples and their field contract only; no business analysis or decision result is implemented.
+这是城市更新数据流程的 Python 初始项目，附有合成输入示例和字段说明，尚未包含业务分析结果。
 
-## Requirements
+## 运行环境
 
-Python 3.12 or later. The starter uses only the standard library.
+需要 Python 3.12 或更新版本，仅使用 Python 标准库。
 
-## Run the baseline checks
+## 检查输入材料
 
 ```powershell
 python -m unittest discover -s tests -v
 ```
 
-The baseline checks validate that the supplied CSV materials can be read and have rows. They do not verify the requested product behavior. See `docs/input-contract.md` for the source fields.
+检查会确认示例 CSV 可读取、字段完整且至少包含一条记录。数据字段说明见 `docs/input-contract.md`。
