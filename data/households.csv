@@ -1,0 +1,4 @@
+household_token,move_start,move_end,step_free,care_distance_limit,confirmation
+H-1,2027-01-02,2027-02-10,true,15,confirmed
+H-2,2027-01-15,2027-02-20,false,30,negotiating
+H-3,2027-02-01,2027-03-01,true,10,unreachable

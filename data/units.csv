@@ -1,0 +1,4 @@
+unit_id,available_from,available_to,step_free,service_distance,maintenance_status,held_for
+U-1,2027-01-01,2027-02-28,true,8,ready,
+U-2,2027-01-10,2027-03-10,false,12,ready,H-2
+U-3,2027-02-01,2027-04-01,true,7,maintenance,

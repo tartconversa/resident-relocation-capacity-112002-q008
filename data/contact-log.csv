@@ -1,0 +1,4 @@
+contact_id,household_token,contacted_at,outcome,proposal_id
+C-1,H-1,2026-11-01,accepted,P-1
+C-2,H-2,2026-11-03,alternative_requested,P-2
+C-3,H-3,2026-11-04,no_answer,
