@@ -12,6 +12,8 @@ class FixtureContractTests(unittest.TestCase):
             with self.subTest(path=path.name), path.open(encoding='utf-8', newline='') as stream:
                 rows = list(csv.DictReader(stream))
                 self.assertTrue(rows)
+                self.assertTrue(all(None not in row for row in rows), f'ragged row in {path.name}')
+                self.assertTrue(all(None not in row.values() for row in rows), f'missing cells in {path.name}')
                 self.assertTrue(all(any(value.strip() for value in row.values()) for row in rows))
 
     def test_input_contract_exists(self):
