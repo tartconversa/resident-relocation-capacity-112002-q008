@@ -1,8 +1,97 @@
-# 合成输入材料
+# 输入契约与判定规则
 
 这里的记录均为合成数据，不对应真实住户、项目或城市。每个文件表示一个来源数据表，不包含分析结论；解释记录时应保留来源标识和修订关系。
 
-- `households.csv`：CSV 表格，字段为 `household_token, move_start, move_end, step_free, care_distance_limit, confirmation`。日期字段使用 ISO 8601 格式；空单元格表示未知或未提供，不代表数值零。
-- `units.csv`：CSV 表格，字段为 `unit_id, available_from, available_to, step_free, service_distance, maintenance_status, held_for`。日期字段使用 ISO 8601 格式；空单元格表示未知或未提供，不代表数值零。
-- `work-batches.csv`：CSV 表格，字段为 `batch_id, block, planned_start, households_required, dependency`。日期字段使用 ISO 8601 格式；空单元格表示未知或未提供，不代表数值零。
-- `contact-log.csv`：CSV 表格，字段为 `contact_id, household_token, contacted_at, outcome, proposal_id`。日期字段使用 ISO 8601 格式；空单元格表示未知或未提供，不代表数值零。
+## 通用规则
+
+- 日期字段使用 ISO 8601（`YYYY-MM-DD`）。
+- **空单元格表示未知或未提供**，不代表 0、`false`、无限可用期或不设上限。
+- 同一主键出现多行时视为同一记录的修订：`revision` 大者生效；相同 `revision` 时文件中靠后的行生效，并产生一条数据提示。
+- 无法解析的值不会被静默丢弃，而是记录为数据问题，并把对应字段视为未知。
+
+## 必要文件
+
+### `households.csv`（家庭需求，匿名）
+
+| 字段 | 必填 | 说明 |
+|---|---|---|
+| `household_token` | 是 | 匿名家庭标识，不使用姓名或门牌号。 |
+| `move_start`, `move_end` | 建议 | 需要周转住房的起止日期（含首尾）。缺失时无法确认安排。 |
+| `step_free` | 建议 | 是否需要无台阶/无障碍单元。空值表示未知，**不按“不需要”处理**。 |
+| `care_distance_limit` | 建议 | 到照护服务的最大可接受距离。空值表示未知，**不按“无上限”处理**。 |
+| `confirmation` | 建议 | `confirmed` / `negotiating` / `unreachable` / `declined` / `unknown`。有效联络记录会覆盖此值。 |
+| `revision` | 可选 | 修订号，默认 1。用于处理同一家庭的多次修订。 |
+| `revised_at` | 可选 | 家庭修订日期。若晚于最后一次联络，旧确认不再沿用。 |
+| `batch_id` | 可选 | 显式关联的施工批次。 |
+| `block` | 可选 | 所在街区，可用于推断批次关联。 |
+
+### `units.csv`（可选周转单元）
+
+| 字段 | 必填 | 说明 |
+|---|---|---|
+| `unit_id` | 是 | 单元标识。 |
+| `available_from`, `available_to` | 建议 | 可入住起止日。缺失时该单元不计入可用容量。 |
+| `step_free` | 建议 | 是否无台阶。空值表示未知，不能分配给有无障碍需求的家庭。 |
+| `service_distance` | 建议 | 到照护服务地点的距离。空值表示未知，不能满足有距离上限的家庭。 |
+| `maintenance_status` | 建议 | `ready` / `maintenance` / `unknown`。只有 `ready` 参与分配。 |
+| `held_for` | 可选 | 口头预留的家庭。口头预留**不占已确认容量**，但仍会阻止其他家庭使用该单元，并生成核实任务。 |
+| `revision` | 可选 | 修订号，默认 1；维护状态临时变化时递增。 |
+| `block` | 可选 | 所在街区，用于评分和批次推断。 |
+
+### `work-batches.csv`（施工批次）
+
+| 字段 | 必填 | 说明 |
+|---|---|---|
+| `batch_id` | 是 | 批次标识。 |
+| `block` | 建议 | 施工街区。 |
+| `planned_start` | 建议 | 计划开工日。缺失时批次不能判定为可开始。 |
+| `households_required` | 建议 | 开工前需要的已确认搬迁户数。缺失时不能判定为可开始。 |
+| `dependency` | 可选 | 前置批次。默认假设前置批次开工后 30 天才具备后续条件（可通过 API 调整）。 |
+
+### `contact-log.csv`（居民确认与联络）
+
+| 字段 | 必填 | 说明 |
+|---|---|---|
+| `contact_id` | 是 | 联络记录标识。 |
+| `household_token` | 是 | 对应家庭。 |
+| `contacted_at` | 建议 | 联络日期。 |
+| `outcome` | 建议 | `accepted` / `alternative_requested` / `no_answer` / `declined` / `unreachable` / `unknown`。 |
+| `proposal_id` | 可选 | 关联的方案编号。 |
+| `note` | 可选 | 联络备注。 |
+| `valid_from`, `valid_to` | 可选 | 该次确认的有效期。 |
+
+确认状态解析顺序：
+
+1. 若家庭修订日期晚于最后一次联络，确认失效，需重新确认。
+2. 取基准日之前、且在有效期内的最后一次联络：
+   - `accepted` → 已确认
+   - `alternative_requested` → 方案待协商
+   - `no_answer` / `unreachable` → 联系不上
+   - `declined` → 真实拒绝
+3. 已接受的确认没有 `valid_to` 时，默认自联络日起 120 天有效；`alternative_requested` 默认 60 天。
+4. 过期的接受视为“待重新确认”；过期的协商/无人接听仍保持对应状态。
+5. 没有任何联络记录时，才使用家庭表的 `confirmation`。
+
+## 可选文件
+
+### `shutdowns.csv`（单元停运）
+
+字段：`unit_id, shutdown_start, shutdown_end`。停运区间内的单元不计入可用容量，也不能被分配。
+
+## 判定与分配规则
+
+- **单元独占**：同一单元在重叠日期内最多安排一户。重算时对历史安排再做一次冲突检查。
+- **不超额分配**：容量不足时只输出未满足需求、逐日缺口和调整建议，不会把同一间房分给两户。
+- **未知不等于满足**：任何关键字段未知时，该安排最多是“待确认方案”，不会计入已确认安置。
+- **无障碍优先**：有无障碍需求的家庭先选无障碍单元；普通家庭优先使用非无障碍单元，最后才动用无障碍单元。
+- **确认优先**：同一阶段内，已确认家庭先于待协商家庭分配；待协商不会挤掉已确认。
+- **确认失效**：确认在入住日前过期、家庭修订日期/需求、单元维护状态变化，都会使原安排释放并生成任务。
+- **施工批次联动**：批次可开始需要：计划日期已知、所需户数已知、关联家庭齐全、已确认搬迁数达标、前置批次条件满足。
+- **共享接驳不等于共住**：接驳按批次和重叠窗口分组，但每个家庭仍占用独立单元。
+
+## 已知假设（便于复核）
+
+- 前置批次默认等待期为 30 天，因为输入中没有真实完工日期。
+- 接受确认默认有效期 120 天，协商默认 60 天；可用联络表的 `valid_to` 覆盖。
+- 家庭未显式提供 `batch_id` 时，按唯一匹配的街区、再按计划开始日落于搬迁期推断关联；报告中会标注 `link_mode`。
+- 评分用于排序和解释，不是安置成功率；无障碍需求单独统计，不并入总体数字。
